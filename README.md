@@ -32,6 +32,8 @@ The repository includes a Capacitor Android wrapper and a GitHub Actions workflo
 3. When it completes, open the new item under **Releases** and download `Momentum.apk` on your Android phone.
 4. Open the download. Android may ask you to allow installs from the browser or Files app; allow it only for that one install, then install Momentum.
 
+After the first release is published, anyone can download the newest APK from `https://momentumco.in/apk` (or `https://momentum-p1f2.onrender.com/apk` until the custom domain is verified).
+
 This debug APK is suitable for direct personal distribution. Publishing to Google Play later requires a signed release AAB/APK and an Android signing key.
 
 ## Public address
