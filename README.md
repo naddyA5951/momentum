@@ -1,0 +1,45 @@
+# Momentum
+
+Futuristic daily planner, focus timer, task manager, and learning dashboard. The client uses React + Vite, Tailwind, React Three Fiber, Lucide; the API uses Express and a persistent SQLite database.
+
+## Install and run
+
+Prerequisite: Node.js 20+.
+
+```bash
+npm run install:all
+npm run dev
+```
+
+Open `http://localhost:5173`. The Express API runs on `http://localhost:4000`; Vite proxies `/api` requests there. The SQLite database is automatically created at `server/data/momentum.db` and persists across restarts.
+
+## Deploy publicly with GitHub + Render
+
+This repository includes `render.yaml`, which provisions a Render web service and managed PostgreSQL database. To deploy it:
+
+1. Create an empty GitHub repository and push this project to its `main` branch.
+2. In Render, choose **New → Blueprint**, connect the GitHub repository, then approve the `momentum` service and `momentum-db` database.
+3. When the deployment becomes healthy, open the generated `onrender.com` URL. Add a custom domain in the service's **Settings → Custom Domains** section.
+
+In production, Express serves the compiled React application and switches automatically to Render PostgreSQL via `DATABASE_URL`. SQLite remains the local-development default. Do not store private user data publicly until authentication and per-user data access controls have been added.
+
+To create a production client bundle, run:
+
+```bash
+npm --prefix client run build
+```
+
+## Architecture
+
+- `client/src/components/CoreCanvas.jsx`: reactive wireframe 3D core; it accelerates while focus is active.
+- `client/src/hooks/useNotifications.js`: browser notification permission and Web Audio chime.
+- `client/src/main.jsx`: dashboard composition, timer state, automatic saving, planner, tasks, learning tracker.
+- `server/src.js`: Express REST API and schema initialization.
+
+## API
+
+`GET/POST /api/tasks`, `PATCH/DELETE /api/tasks/:id` manage tasks. Equivalent CRUD routes exist for `/api/blocks` and `/api/sessions`. `GET/PATCH /api/learning` reads and updates learning totals. All POST/PATCH calls use JSON.
+
+## Database schema
+
+SQLite tables are initialized in `server/src.js`: `tasks` (title, priority, tags, estimate, status), `schedule_blocks` (title, category, start/end times, color), `focus_sessions` (duration and kind), and singleton `learning_metrics` (minutes, streak, milestones, last studied date).

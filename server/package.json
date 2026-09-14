@@ -1,0 +1,6 @@
+{
+  "name": "momentum-api",
+  "type": "module",
+  "scripts": { "dev": "node --watch src.js", "start": "node src.js" },
+  "dependencies": { "better-sqlite3": "^11.7.0", "cors": "^2.8.5", "express": "^4.21.2", "pg": "^8.13.1" }
+}
