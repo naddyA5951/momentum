@@ -1,74 +1,18 @@
-import express from 'express';
-import cors from 'cors';
-import Database from 'better-sqlite3';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const usePostgres = Boolean(process.env.DATABASE_URL);
-const sqlite = usePostgres ? null : new Database(path.join(__dirname, 'data', 'momentum.db'));
-const pool = usePostgres ? new (await import('pg')).default.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }) : null;
-if (sqlite) sqlite.pragma('journal_mode = WAL');
-
-// $1-style placeholders keep PostgreSQL queries portable; SQLite is adapted locally.
-const query = (statement, params = []) => usePostgres
-  ? pool.query(statement, params).then(result => result.rows)
-  : Promise.resolve(sqlite.prepare(statement.replace(/\$\d+/g, '?')).all(...params));
-const execute = async (statement, params = []) => usePostgres
-  ? (await pool.query(statement, params)).rows
-  : sqlite.prepare(statement.replace(/\$\d+/g, '?')).run(...params).lastInsertRowid;
-
-const schema = usePostgres ? `
-CREATE TABLE IF NOT EXISTS tasks (id SERIAL PRIMARY KEY, title TEXT NOT NULL, priority TEXT NOT NULL DEFAULT 'medium', tags TEXT NOT NULL DEFAULT '[]', estimate INTEGER NOT NULL DEFAULT 25, status TEXT NOT NULL DEFAULT 'today', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-CREATE TABLE IF NOT EXISTS schedule_blocks (id SERIAL PRIMARY KEY, title TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'work', start_time TEXT NOT NULL, end_time TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#8b5cf6');
-CREATE TABLE IF NOT EXISTS focus_sessions (id SERIAL PRIMARY KEY, duration INTEGER NOT NULL, kind TEXT NOT NULL DEFAULT 'focus', completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-CREATE TABLE IF NOT EXISTS learning_metrics (id INTEGER PRIMARY KEY, total_minutes INTEGER NOT NULL DEFAULT 0, streak INTEGER NOT NULL DEFAULT 0, milestones INTEGER NOT NULL DEFAULT 0, last_studied TEXT);
-` : `
-CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, priority TEXT NOT NULL DEFAULT 'medium', tags TEXT NOT NULL DEFAULT '[]', estimate INTEGER NOT NULL DEFAULT 25, status TEXT NOT NULL DEFAULT 'today', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS schedule_blocks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'work', start_time TEXT NOT NULL, end_time TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#8b5cf6');
-CREATE TABLE IF NOT EXISTS focus_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, duration INTEGER NOT NULL, kind TEXT NOT NULL DEFAULT 'focus', completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS learning_metrics (id INTEGER PRIMARY KEY CHECK(id = 1), total_minutes INTEGER NOT NULL DEFAULT 0, streak INTEGER NOT NULL DEFAULT 0, milestones INTEGER NOT NULL DEFAULT 0, last_studied TEXT);
-`;
-if (usePostgres) await execute(schema); else sqlite.exec(schema);
-await execute(usePostgres ? 'INSERT INTO learning_metrics(id) VALUES (1) ON CONFLICT (id) DO NOTHING' : 'INSERT OR IGNORE INTO learning_metrics(id) VALUES (1)');
-
-const app = express();
-app.use(cors());
-app.use(express.json({ limit: '32kb' }));
-const allowed = (source, keys) => Object.fromEntries(keys.filter(key => source[key] !== undefined).map(key => [key, source[key]]));
-const format = row => row && ({ ...row, tags: row.tags ? JSON.parse(row.tags) : [] });
-const holders = count => Array.from({ length: count }, (_, index) => `$${index + 1}`).join(', ');
-
-function crud(route, table, columns) {
-  app.get(`/api/${route}`, async (_, res, next) => { try { res.json((await query(`SELECT * FROM ${table} ORDER BY id DESC`)).map(format)); } catch (error) { next(error); } });
-  app.post(`/api/${route}`, async (req, res, next) => {
-    try {
-      const data = allowed(req.body, columns); if (data.tags) data.tags = JSON.stringify(data.tags);
-      const keys = Object.keys(data); if (!keys.length) return res.status(400).json({ error: 'Request body is required' });
-      const statement = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${holders(keys.length)})${usePostgres ? ' RETURNING *' : ''}`;
-      const values = keys.map(key => data[key]);
-      const row = usePostgres ? (await query(statement, values))[0] : (await query(`SELECT * FROM ${table} WHERE id = $1`, [await execute(statement, values)]))[0];
-      res.status(201).json(format(row));
-    } catch (error) { next(error); }
-  });
-  app.patch(`/api/${route}/:id`, async (req, res, next) => {
-    try {
-      const data = allowed(req.body, columns); if (data.tags) data.tags = JSON.stringify(data.tags);
-      const keys = Object.keys(data); if (!keys.length) return res.status(400).json({ error: 'No changes supplied' });
-      const values = [...keys.map(key => data[key]), req.params.id];
-      const statement = `UPDATE ${table} SET ${keys.map((key, i) => `${key} = $${i + 1}`).join(', ')} WHERE id = $${keys.length + 1}${usePostgres ? ' RETURNING *' : ''}`;
-      const row = usePostgres ? (await query(statement, values))[0] : (await execute(statement, values), (await query(`SELECT * FROM ${table} WHERE id = $1`, [req.params.id]))[0]);
-      if (!row) return res.status(404).json({ error: 'Not found' }); res.json(format(row));
-    } catch (error) { next(error); }
-  });
-  app.delete(`/api/${route}/:id`, async (req, res, next) => { try { await execute(`DELETE FROM ${table} WHERE id = $1`, [req.params.id]); res.status(204).end(); } catch (error) { next(error); } });
-}
-crud('tasks', 'tasks', ['title', 'priority', 'tags', 'estimate', 'status']);
-crud('blocks', 'schedule_blocks', ['title', 'category', 'start_time', 'end_time', 'color']);
-crud('sessions', 'focus_sessions', ['duration', 'kind']);
-app.get('/api/learning', async (_, res, next) => { try { res.json((await query('SELECT * FROM learning_metrics WHERE id = 1'))[0]); } catch (error) { next(error); } });
-app.patch('/api/learning', async (req, res, next) => { try { const data = allowed(req.body, ['total_minutes', 'streak', 'milestones', 'last_studied']); const keys = Object.keys(data); if (!keys.length) return res.status(400).json({ error: 'No changes supplied' }); await execute(`UPDATE learning_metrics SET ${keys.map((key, i) => `${key} = $${i + 1}`).join(', ')} WHERE id = 1`, keys.map(key => data[key])); res.json((await query('SELECT * FROM learning_metrics WHERE id = 1'))[0]); } catch (error) { next(error); } });
-app.get('/api/health', (_, res) => res.json({ ok: true, database: usePostgres ? 'postgres' : 'sqlite' }));
-if (process.env.NODE_ENV === 'production') { const dist = path.join(__dirname, '..', 'client', 'dist'); app.use(express.static(dist)); app.get('*', (_, res) => res.sendFile(path.join(dist, 'index.html'))); }
-app.use((error, _, res, __) => { console.error(error); res.status(500).json({ error: 'Unexpected server error' }); });
-app.listen(process.env.PORT || 4000, () => console.log(`Momentum API on port ${process.env.PORT || 4000} (${usePostgres ? 'PostgreSQL' : 'SQLite'})`));
+import express from 'express'; import cors from 'cors'; import Database from 'better-sqlite3'; import path from 'node:path'; import {fileURLToPath} from 'node:url';
+const __dirname=path.dirname(fileURLToPath(import.meta.url)), postgres=Boolean(process.env.DATABASE_URL), sqlite=postgres?null:new Database(path.join(__dirname,'data','momentum.db'));
+const pool=postgres?new (await import('pg')).default.Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}):null;
+const bcrypt=(await import('bcryptjs')).default, jwt=(await import('jsonwebtoken')).default, secret=process.env.JWT_SECRET||'local-development-only-secret'; if(sqlite)sqlite.pragma('journal_mode=WAL');
+const q=(s,p=[])=>postgres?pool.query(s,p).then(r=>r.rows):Promise.resolve(sqlite.prepare(s.replace(/\$\d+/g,'?')).all(...p));
+const exec=async(s,p=[])=>postgres?(await pool.query(s,p)).rows:sqlite.prepare(s.replace(/\$\d+/g,'?')).run(...p).lastInsertRowid;
+const schema=postgres?`CREATE TABLE IF NOT EXISTS users(id SERIAL PRIMARY KEY,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,created_at TIMESTAMPTZ DEFAULT NOW());CREATE TABLE IF NOT EXISTS tasks(id SERIAL PRIMARY KEY,user_id INTEGER REFERENCES users(id),title TEXT NOT NULL,priority TEXT DEFAULT 'medium',tags TEXT DEFAULT '[]',estimate INTEGER DEFAULT 25,status TEXT DEFAULT 'today',created_at TIMESTAMPTZ DEFAULT NOW());CREATE TABLE IF NOT EXISTS schedule_blocks(id SERIAL PRIMARY KEY,user_id INTEGER REFERENCES users(id),title TEXT NOT NULL,category TEXT DEFAULT 'work',start_time TEXT NOT NULL,end_time TEXT NOT NULL,color TEXT DEFAULT '#8b5cf6');CREATE TABLE IF NOT EXISTS focus_sessions(id SERIAL PRIMARY KEY,user_id INTEGER REFERENCES users(id),duration INTEGER NOT NULL,kind TEXT DEFAULT 'focus',completed_at TIMESTAMPTZ DEFAULT NOW());CREATE TABLE IF NOT EXISTS user_learning_metrics(user_id INTEGER PRIMARY KEY REFERENCES users(id),total_minutes INTEGER DEFAULT 0,streak INTEGER DEFAULT 0,milestones INTEGER DEFAULT 0,last_studied TEXT);`:`CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP);CREATE TABLE IF NOT EXISTS tasks(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER,title TEXT NOT NULL,priority TEXT DEFAULT 'medium',tags TEXT DEFAULT '[]',estimate INTEGER DEFAULT 25,status TEXT DEFAULT 'today',created_at TEXT DEFAULT CURRENT_TIMESTAMP);CREATE TABLE IF NOT EXISTS schedule_blocks(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER,title TEXT NOT NULL,category TEXT DEFAULT 'work',start_time TEXT NOT NULL,end_time TEXT NOT NULL,color TEXT DEFAULT '#8b5cf6');CREATE TABLE IF NOT EXISTS focus_sessions(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER,duration INTEGER NOT NULL,kind TEXT DEFAULT 'focus',completed_at TEXT DEFAULT CURRENT_TIMESTAMP);CREATE TABLE IF NOT EXISTS user_learning_metrics(user_id INTEGER PRIMARY KEY,total_minutes INTEGER DEFAULT 0,streak INTEGER DEFAULT 0,milestones INTEGER DEFAULT 0,last_studied TEXT);`;
+if(postgres)await exec(schema);else sqlite.exec(schema);
+if(postgres){for(const t of ['tasks','schedule_blocks','focus_sessions'])await exec(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)`)}else{for(const t of ['tasks','schedule_blocks','focus_sessions'])if(!sqlite.prepare(`PRAGMA table_info(${t})`).all().some(c=>c.name==='user_id'))sqlite.exec(`ALTER TABLE ${t} ADD COLUMN user_id INTEGER`)}
+const app=express();app.use(cors());app.use(express.json({limit:'32kb'}));
+const auth=(req,res,next)=>{try{const token=req.headers.authorization?.replace('Bearer ','');if(!token)return res.status(401).json({error:'Sign in required'});req.user=jwt.verify(token,secret);next()}catch{return res.status(401).json({error:'Session expired. Please sign in again.'})}};
+const safeUser=user=>({id:user.id,email:user.email}), makeToken=user=>jwt.sign({id:user.id,email:user.email},secret,{expiresIn:'7d'}), allowed=(o,ks)=>Object.fromEntries(ks.filter(k=>o[k]!==undefined).map(k=>[k,o[k]])), format=row=>row&&({...row,tags:row.tags?JSON.parse(row.tags):[]}), holders=n=>Array.from({length:n},(_,i)=>`$${i+1}`).join(', ');
+app.post('/api/auth/register',async(req,res,next)=>{try{const email=String(req.body.email||'').trim().toLowerCase(),password=String(req.body.password||'');if(!/^\S+@\S+\.\S+$/.test(email)||password.length<8)return res.status(400).json({error:'Use a valid email and a password of at least 8 characters.'});const hash=await bcrypt.hash(password,12),rows=postgres?await q('INSERT INTO users(email,password_hash) VALUES($1,$2) RETURNING id,email',[email,hash]):[await exec('INSERT INTO users(email,password_hash) VALUES($1,$2)',[email,hash])];const user=postgres?rows[0]:(await q('SELECT id,email FROM users WHERE id=$1',[rows[0]]))[0];res.status(201).json({token:makeToken(user),user:safeUser(user)})}catch(e){if(String(e).includes('UNIQUE'))return res.status(409).json({error:'An account with that email already exists.'});next(e)}});
+app.post('/api/auth/login',async(req,res,next)=>{try{const email=String(req.body.email||'').trim().toLowerCase(),user=(await q('SELECT * FROM users WHERE email=$1',[email]))[0];if(!user||!(await bcrypt.compare(String(req.body.password||''),user.password_hash)))return res.status(401).json({error:'Incorrect email or password.'});res.json({token:makeToken(user),user:safeUser(user)})}catch(e){next(e)}});app.get('/api/auth/me',auth,(req,res)=>res.json({user:safeUser(req.user)}));
+function crud(route,table,columns){app.get(`/api/${route}`,auth,async(req,res,next)=>{try{res.json((await q(`SELECT * FROM ${table} WHERE user_id=$1 ORDER BY id DESC`,[req.user.id])).map(format))}catch(e){next(e)}});app.post(`/api/${route}`,auth,async(req,res,next)=>{try{const data=allowed(req.body,columns);if(data.tags)data.tags=JSON.stringify(data.tags);data.user_id=req.user.id;const keys=Object.keys(data),values=keys.map(k=>data[k]);if(!keys.length)return res.status(400).json({error:'Request body is required'});const stmt=`INSERT INTO ${table} (${keys.join(',')}) VALUES (${holders(keys.length)})${postgres?' RETURNING *':''}`,row=postgres?(await q(stmt,values))[0]:(await q(`SELECT * FROM ${table} WHERE id=$1`,[await exec(stmt,values)]))[0];res.status(201).json(format(row))}catch(e){next(e)}});app.patch(`/api/${route}/:id`,auth,async(req,res,next)=>{try{const data=allowed(req.body,columns);if(data.tags)data.tags=JSON.stringify(data.tags);const keys=Object.keys(data),values=[...keys.map(k=>data[k]),req.params.id,req.user.id];if(!keys.length)return res.status(400).json({error:'No changes supplied'});const stmt=`UPDATE ${table} SET ${keys.map((k,i)=>`${k}=$${i+1}`).join(',')} WHERE id=$${keys.length+1} AND user_id=$${keys.length+2}${postgres?' RETURNING *':''}`,row=postgres?(await q(stmt,values))[0]:(await exec(stmt,values),(await q(`SELECT * FROM ${table} WHERE id=$1 AND user_id=$2`,[req.params.id,req.user.id]))[0]);if(!row)return res.status(404).json({error:'Not found'});res.json(format(row))}catch(e){next(e)}});app.delete(`/api/${route}/:id`,auth,async(req,res,next)=>{try{await exec(`DELETE FROM ${table} WHERE id=$1 AND user_id=$2`,[req.params.id,req.user.id]);res.status(204).end()}catch(e){next(e)}})}
+crud('tasks','tasks',['title','priority','tags','estimate','status']);crud('blocks','schedule_blocks',['title','category','start_time','end_time','color']);crud('sessions','focus_sessions',['duration','kind']);
+app.get('/api/learning',auth,async(req,res,next)=>{try{let row=(await q('SELECT * FROM user_learning_metrics WHERE user_id=$1',[req.user.id]))[0];if(!row){await exec(`INSERT INTO user_learning_metrics(user_id) VALUES($1)${postgres?' ON CONFLICT(user_id) DO NOTHING':''}`,[req.user.id]);row=(await q('SELECT * FROM user_learning_metrics WHERE user_id=$1',[req.user.id]))[0]}res.json(row)}catch(e){next(e)}});app.patch('/api/learning',auth,async(req,res,next)=>{try{const d=allowed(req.body,['total_minutes','streak','milestones','last_studied']),ks=Object.keys(d);if(!ks.length)return res.status(400).json({error:'No changes supplied'});await exec(`UPDATE user_learning_metrics SET ${ks.map((k,i)=>`${k}=$${i+1}`).join(',')} WHERE user_id=$${ks.length+1}`,[...ks.map(k=>d[k]),req.user.id]);res.json((await q('SELECT * FROM user_learning_metrics WHERE user_id=$1',[req.user.id]))[0])}catch(e){next(e)}});
+app.get('/api/health',(_,res)=>res.json({ok:true,database:postgres?'postgres':'sqlite'}));if(process.env.NODE_ENV==='production'){const dist=path.join(__dirname,'..','client','dist');app.use(express.static(dist));app.get('*',(_,res)=>res.sendFile(path.join(dist,'index.html')))}app.use((e,_,res,__)=>{console.error(e);res.status(500).json({error:'Unexpected server error'})});app.listen(process.env.PORT||4000,()=>console.log('Momentum API ready'));
