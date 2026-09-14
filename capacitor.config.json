@@ -1,0 +1,9 @@
+{
+  "appId": "com.naveed.momentum",
+  "appName": "Momentum",
+  "webDir": "client/dist",
+  "server": {
+    "url": "https://momentum-p1f2.onrender.com",
+    "cleartext": false
+  }
+}

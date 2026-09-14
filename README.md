@@ -23,6 +23,17 @@ This repository includes `render.yaml`, which provisions a Render web service an
 
 In production, Express serves the compiled React application and switches automatically to Render PostgreSQL via `DATABASE_URL`. SQLite remains the local-development default. Do not store private user data publicly until authentication and per-user data access controls have been added.
 
+## Direct Android APK (no Play Store)
+
+The repository includes a Capacitor Android wrapper and a GitHub Actions workflow. It packages the hosted Momentum app as an installable Android APK; data and sign-in remain on the deployed Render service.
+
+1. In GitHub, open the repository's **Actions** tab and select **Build Momentum Android APK**.
+2. Click **Run workflow**, keep **Publish the APK** enabled, and run it.
+3. When it completes, open the new item under **Releases** and download `Momentum.apk` on your Android phone.
+4. Open the download. Android may ask you to allow installs from the browser or Files app; allow it only for that one install, then install Momentum.
+
+This debug APK is suitable for direct personal distribution. Publishing to Google Play later requires a signed release AAB/APK and an Android signing key.
+
 To create a production client bundle, run:
 
 ```bash
