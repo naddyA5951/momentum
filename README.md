@@ -34,6 +34,10 @@ The repository includes a Capacitor Android wrapper and a GitHub Actions workflo
 
 This debug APK is suitable for direct personal distribution. Publishing to Google Play later requires a signed release AAB/APK and an Android signing key.
 
+## Public address
+
+Momentum is live at `https://momentum-p1f2.onrender.com`. For a shorter branded address, purchase a domain (for example `momentumbyNaveed.com`) from a registrar, then add it under **Render → momentum → Settings → Custom Domains**. Render will show the DNS record to add at the domain registrar.
+
 To create a production client bundle, run:
 
 ```bash
