@@ -32,6 +32,7 @@ jobs:
           npm --prefix server install
           npm run build
           npx cap add android
+          npx @capacitor/assets generate --android --assetPath resources --iconBackgroundColor '#090b17'
           npx cap sync android
           cd android && ./gradlew assembleDebug
       - name: Publish direct-download APK

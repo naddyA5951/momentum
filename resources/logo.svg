@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Momentum logo">
+  <defs><linearGradient id="orbit" x1="88" y1="410" x2="426" y2="92" gradientUnits="userSpaceOnUse"><stop stop-color="#22d3ee"/><stop offset=".54" stop-color="#8b5cf6"/><stop offset="1" stop-color="#d8b4fe"/></linearGradient><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+  <rect width="512" height="512" rx="124" fill="#090b17"/><circle cx="256" cy="256" r="174" fill="none" stroke="#312e5940" stroke-width="3"/>
+  <path d="M108 337c43 67 131 103 207 79 79-25 124-109 94-181-27-64-105-97-173-69-44 18-73 55-82 99" fill="none" stroke="url(#orbit)" stroke-width="34" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M158 333l-66 27 28-65" fill="#22d3ee" filter="url(#glow)"/><circle cx="256" cy="256" r="42" fill="#090b17" stroke="#bca7ff" stroke-width="9"/><path d="M256 229v55m-27-28h55" stroke="#e9e4ff" stroke-width="12" stroke-linecap="round"/>
+</svg>

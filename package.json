@@ -11,5 +11,11 @@
     "build": "npm --prefix client run build",
     "apk:prepare": "npm run build && npx cap add android || true && npx cap sync android"
   },
-  "devDependencies": { "@capacitor/android": "^7.4.3", "@capacitor/cli": "^7.4.3", "@capacitor/core": "^7.4.3", "concurrently": "^9.1.2" }
+  "devDependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/core": "^7.4.3",
+    "concurrently": "^9.1.2"
+  }
 }
