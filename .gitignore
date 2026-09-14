@@ -1,0 +1,13 @@
+# Dependencies are installed by npm on each target platform; never commit them.
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Generated output and local SQLite data.
+client/dist/
+server/data/*.db
+server/data/*.db-*
+
+# Local environment files.
+.env
+.env.*
