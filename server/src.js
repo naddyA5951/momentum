@@ -9,7 +9,7 @@ if(postgres)await exec(schema);else sqlite.exec(schema);
 if(postgres){for(const t of ['tasks','schedule_blocks','focus_sessions'])await exec(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)`)}else{for(const t of ['tasks','schedule_blocks','focus_sessions'])if(!sqlite.prepare(`PRAGMA table_info(${t})`).all().some(c=>c.name==='user_id'))sqlite.exec(`ALTER TABLE ${t} ADD COLUMN user_id INTEGER`)}
 const app=express();app.use(cors());app.use(express.json({limit:'32kb'}));
 // A stable, shareable URL for Android users. GitHub serves the newest published APK.
-const apkDownloadUrl='https://github.com/naddyA5951/momentum/releases/latest/download/Momentum.apk';
+const apkDownloadUrl='https://github.com/naddyA5951/momentum/releases/latest/download/app-debug.apk';
 app.get(['/apk','/download-apk'],(_,res)=>res.redirect(302,apkDownloadUrl));
 const auth=(req,res,next)=>{try{const token=req.headers.authorization?.replace('Bearer ','');if(!token)return res.status(401).json({error:'Sign in required'});req.user=jwt.verify(token,secret);next()}catch{return res.status(401).json({error:'Session expired. Please sign in again.'})}};
 const safeUser=user=>({id:user.id,email:user.email}), makeToken=user=>jwt.sign({id:user.id,email:user.email},secret,{expiresIn:'7d'}), allowed=(o,ks)=>Object.fromEntries(ks.filter(k=>o[k]!==undefined).map(k=>[k,o[k]])), format=row=>row&&({...row,tags:row.tags?JSON.parse(row.tags):[]}), holders=n=>Array.from({length:n},(_,i)=>`$${i+1}`).join(', ');
