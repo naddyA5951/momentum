@@ -1,0 +1,10 @@
+{
+  "name": "Momentum — Deep Work",
+  "short_name": "Momentum",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080a12",
+  "theme_color": "#080a12",
+  "description": "A focused daily planner and deep-work timer.",
+  "icons": [{ "src": "/momentum-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
