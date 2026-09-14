@@ -43,3 +43,4 @@ npm --prefix client run build
 ## Database schema
 
 SQLite tables are initialized in `server/src.js`: `tasks` (title, priority, tags, estimate, status), `schedule_blocks` (title, category, start/end times, color), `focus_sessions` (duration and kind), and singleton `learning_metrics` (minutes, streak, milestones, last studied date).
+# momentum
