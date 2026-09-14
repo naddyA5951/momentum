@@ -18,7 +18,7 @@ Open `http://localhost:5173`. The Express API runs on `http://localhost:4000`; V
 This repository includes `render.yaml`, which provisions a Render web service and managed PostgreSQL database. To deploy it:
 
 1. Create an empty GitHub repository and push this project to its `main` branch.
-2. In Render, choose **New → Blueprint**, connect the GitHub repository, then approve the `momentum` service and `momentum-db` database.
+2. In Render, choose **New → Blueprint**, connect the GitHub repository, then approve the `momentum` service and `momentum-db` database. The build command explicitly includes development dependencies because Vite is required to compile the frontend.
 3. When the deployment becomes healthy, open the generated `onrender.com` URL. Add a custom domain in the service's **Settings → Custom Domains** section.
 
 In production, Express serves the compiled React application and switches automatically to Render PostgreSQL via `DATABASE_URL`. SQLite remains the local-development default. Do not store private user data publicly until authentication and per-user data access controls have been added.
